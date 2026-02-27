@@ -1,0 +1,9 @@
+/* apps/dashboard/app/globals.css */
+@import "tailwindcss";
+
+@theme {
+  --color-bordeaux-400: #a31d41;
+  --color-bordeaux-500: #8a1538;
+  --color-bordeaux-600: #6e112d;
+  --color-bordeaux-700: #520c22;
+}

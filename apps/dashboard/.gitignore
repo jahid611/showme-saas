@@ -1,0 +1,35 @@
+# --- DÉPENDANCES ---
+node_modules/
+.pnpm-debug.log*
+
+# --- NEXT.JS (Dashboard & Docs) ---
+.next/
+out/
+build/
+
+# --- VITE & COMPILATION (Widget) ---
+dist/
+*.tsbuildinfo
+
+# --- SÉCURITÉ (CRITIQUE) ---
+# Ne jamais, JAMAIS commiter ces fichiers
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env*.local
+
+# --- TURBOREPO ---
+.turbo/
+
+# --- SUPABASE LOCAL (Si utilisé) ---
+.supabase/
+
+# --- FICHIERS SYSTÈME ---
+.DS_Store
+Thumbs.db
+*.log
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
