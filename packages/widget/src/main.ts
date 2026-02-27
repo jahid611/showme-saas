@@ -8,7 +8,7 @@ interface Trigger {
 class ShowMeWidget {
   private clientId: string;
   private isInitialized: boolean = false;
-  private apiBaseUrl: string = 'http://localhost:3000'; 
+  private apiBaseUrl: string;
   
   private shadowRoot: ShadowRoot | null = null;
   private playerWrapper: HTMLDivElement | null = null;
@@ -16,6 +16,7 @@ class ShowMeWidget {
 
   constructor() {
     this.clientId = this.extractClientId();
+    this.apiBaseUrl = this.getApiBaseUrl();
     
     if (!this.clientId) {
       console.error("[ShowMe] Erreur : Attribut 'data-client-id' manquant sur la balise script.");
@@ -27,6 +28,22 @@ class ShowMeWidget {
     } else {
       this.init();
     }
+  }
+
+  /**
+   * Détermine l'URL de l'API dynamiquement.
+   * Si le script est servi depuis Vercel, on utilise l'URL de production.
+   */
+  private getApiBaseUrl(): string {
+    const scriptTag = document.currentScript as HTMLScriptElement;
+    if (scriptTag && scriptTag.src.includes('vercel.app')) {
+      try {
+        return new URL(scriptTag.src).origin;
+      } catch (e) {
+        return 'http://localhost:3000';
+      }
+    }
+    return 'http://localhost:3000';
   }
 
   private extractClientId(): string {
@@ -173,5 +190,4 @@ class ShowMeWidget {
   }
 }
 
-// L'instanciation est bien à l'extérieur de la classe
 new ShowMeWidget();
