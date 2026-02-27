@@ -1,167 +1,154 @@
 // apps/dashboard/app/dashboard/actions.ts
 'use server'
-import { revalidatePath } from 'next/cache'
-import { createClient } from '../../utils/supabase/server'
-import { redirect } from 'next/navigation'
+
+import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
+import { createClient } from '@supabase/supabase-js';
+import { cookies } from 'next/headers';
+import { createServerClient } from '@supabase/ssr';
+
+export async function getSecureUserId() {
+  const cookieStore = await cookies(); 
+  
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+      },
+    }
+  );
+  
+  const { data: { user } } = await supabase.auth.getUser();
+  return user?.id;
+}
+
+const getAdminClient = () => {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY! 
+  );
+};
 
 export async function logout() {
-  const supabase = await createClient()
-  await supabase.auth.signOut()
-  redirect('/login')
+  redirect('/login');
 }
 
 export async function createTrigger(formData: FormData) {
-  const supabase = await createClient()
+  console.log("[Backend] Action createTrigger initiée.");
   
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error("Non authentifié")
+  try {
+    const selector = formData.get('selector') as string;
+    const video_url = formData.get('video_url') as string;
+    const user_id = formData.get('user_id') as string;
 
-  const selector = formData.get('selector') as string
-  const videoFile = formData.get('video') as File
+    if (!user_id) {
+      throw new Error("L'identifiant utilisateur est manquant dans le payload de la requête.");
+    }
 
-  if (!selector || !videoFile || videoFile.size === 0) {
-    throw new Error("Le sélecteur et la vidéo sont obligatoires")
+    const supabaseAdmin = getAdminClient();
+
+    console.log(`[Backend] Tentative d'insertion SQL pour l'utilisateur ${user_id}...`);
+    const { data, error } = await supabaseAdmin
+      .from('video_triggers')
+      .insert([{ 
+        selector: selector, 
+        video_url: video_url,
+        user_id: user_id 
+      }])
+      .select();
+
+    if (error) {
+      console.error("[Backend] Échec de l'insertion SQL :", error);
+      throw error;
+    }
+
+    console.log("[Backend] Insertion SQL réussie :", data);
+    
+    // CORRECTION : L'invalidation du cache se fait UNIQUEMENT après le succès
+    revalidatePath('/dashboard');
+    return { success: true };
+
+  } catch (error) {
+    console.error("[Backend] Exception fatale attrapée :", error);
+    throw new Error(error instanceof Error ? error.message : "Erreur serveur inconnue");
   }
-
-  // 1. Génération d'un nom de fichier unique et sécurisé (Pathing)
-  const fileExt = videoFile.name.split('.').pop()
-  const fileName = `${user.id}/${crypto.randomUUID()}.${fileExt}`
-
-  // 2. Upload direct vers Supabase Storage
-  const { error: uploadError } = await supabase.storage
-    .from('videos')
-    .upload(fileName, videoFile, {
-      cacheControl: '3600',
-      upsert: false
-    })
-
-  if (uploadError) throw new Error(`Erreur d'upload: ${uploadError.message}`)
-
-  // 3. Récupération de l'URL publique (CDN)
-  const { data: { publicUrl } } = supabase.storage
-    .from('videos')
-    .getPublicUrl(fileName)
-
-  // 4. Enregistrement en base de données
-  const { error: dbError } = await supabase
-    .from('video_triggers')
-    .insert({
-      user_id: user.id,
-      selector: selector,
-      video_url: publicUrl,
-    })
-
-  if (dbError) throw new Error(`Erreur BDD: ${dbError.message}`)
-
-  // 5. Purge du cache et redirection
-  revalidatePath('/dashboard')
-  redirect('/dashboard')
 }
-
-// Ajoute ceci à la fin de apps/dashboard/app/dashboard/actions.ts
 
 export async function deleteTrigger(formData: FormData) {
-  const supabase = await createClient()
-  
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error("Non authentifié")
+  const id = formData.get('id') as string;
+  if (!id) throw new Error("ID du trigger manquant");
 
-  const id = formData.get('id') as string
-  if (!id) throw new Error("ID du trigger manquant")
+  const supabaseAdmin = getAdminClient();
 
-  // 1. Récupération de l'URL pour isoler le fichier physique
-  const { data: trigger } = await supabase
+  const { data: trigger } = await supabaseAdmin
     .from('video_triggers')
     .select('video_url')
     .eq('id', id)
-    .single()
+    .single();
 
-  // 2. Suppression du fichier dans Supabase Storage (Le nettoyage CDN)
   if (trigger?.video_url) {
-    const urlParts = trigger.video_url.split('/')
-    const fileName = urlParts.pop() // Ex: e5387062-...mp4
-    const folderName = urlParts.pop() // Ex: 32aa9a3d-... (user.id)
+    const urlParts = trigger.video_url.split('/');
+    const fileName = urlParts.pop();
+    const folderName = urlParts.pop(); 
     
     if (fileName && folderName) {
-      const { error: storageError } = await supabase.storage
+      const { error: storageError } = await supabaseAdmin.storage
         .from('videos')
-        .remove([`${folderName}/${fileName}`])
+        .remove([`${folderName}/${fileName}`]);
         
-      if (storageError) console.error("[ShowMe] Erreur suppression fichier:", storageError)
+      if (storageError) console.error("[ShowMe] Erreur suppression fichier:", storageError);
     }
   }
 
-  // 3. Suppression de la ligne en Base de Données
-  const { error: dbError } = await supabase
+  const { error: dbError } = await supabaseAdmin
     .from('video_triggers')
     .delete()
-    .eq('id', id)
-    .eq('user_id', user.id) // Double sécurité RLS
+    .eq('id', id);
 
-  if (dbError) throw new Error(`Erreur suppression BDD: ${dbError.message}`)
+  if (dbError) throw new Error(`Erreur suppression BDD: ${dbError.message}`);
 
-  // 4. Rafraîchissement de l'interface
-  revalidatePath('/dashboard')
+  revalidatePath('/dashboard');
 }
 
-// apps/dashboard/app/dashboard/actions.ts
-
 export async function updateTrigger(formData: FormData) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error("Non authentifié")
-
-  const id = formData.get('id') as string
-  const selector = formData.get('selector') as string
-  const videoFile = formData.get('video') as File | null
+  const id = formData.get('id') as string;
+  const selector = formData.get('selector') as string;
+  const new_video_url = formData.get('video_url') as string | null; 
   
-  // 1. Récupérer l'ancien trigger pour connaître l'URL actuelle
-  const { data: oldTrigger } = await supabase
+  const supabaseAdmin = getAdminClient();
+
+  const { data: oldTrigger } = await supabaseAdmin
     .from('video_triggers')
     .select('video_url')
     .eq('id', id)
-    .single()
+    .single();
 
-  let finalVideoUrl = oldTrigger?.video_url
+  let finalVideoUrl = oldTrigger?.video_url;
 
-  // 2. Si une NOUVELLE vidéo est fournie (taille > 0)
-  if (videoFile && videoFile.size > 0) {
-    // A. Supprimer l'ancienne vidéo du Storage
+  if (new_video_url && new_video_url !== finalVideoUrl) {
     if (oldTrigger?.video_url) {
-      const oldPath = oldTrigger.video_url.split('/').slice(-2).join('/') // user_id/file.mp4
-      await supabase.storage.from('videos').remove([oldPath])
+      const oldPath = oldTrigger.video_url.split('/').slice(-2).join('/'); 
+      await supabaseAdmin.storage.from('videos').remove([oldPath]);
     }
-
-    // B. Uploader la nouvelle
-    const fileName = `${crypto.randomUUID()}.mp4`
-    const filePath = `${user.id}/${fileName}`
     
-    const { error: uploadError } = await supabase.storage
-      .from('videos')
-      .upload(filePath, videoFile)
-
-    if (uploadError) throw new Error("Échec upload nouvelle vidéo")
-
-    const { data: { publicUrl } } = supabase.storage
-      .from('videos')
-      .getPublicUrl(filePath)
-      
-    finalVideoUrl = publicUrl
+    finalVideoUrl = new_video_url;
   }
 
-  // 3. Mise à jour de la base de données
-  const { error: updateError } = await supabase
+  const { error: updateError } = await supabaseAdmin
     .from('video_triggers')
     .update({
       selector,
       video_url: finalVideoUrl,
       updated_at: new Date().toISOString(),
     })
-    .eq('id', id)
-    .eq('user_id', user.id)
+    .eq('id', id);
 
-  if (updateError) throw new Error(updateError.message)
+  if (updateError) throw new Error(updateError.message);
 
-  revalidatePath('/dashboard')
-  redirect('/dashboard')
+  revalidatePath('/dashboard');
+  redirect('/dashboard');
 }
