@@ -17,6 +17,9 @@ importers:
       typescript:
         specifier: 5.9.2
         version: 5.9.2
+      widget:
+        specifier: workspace:*
+        version: link:packages/widget
 
   apps/dashboard:
     dependencies:
