@@ -11,6 +11,7 @@
   "devDependencies": {
     "prettier": "^3.7.4",
     "turbo": "^2.8.11",
+    "widget": "workspace:*",
     "typescript": "5.9.2"
   },
   "packageManager": "pnpm@9.0.0",

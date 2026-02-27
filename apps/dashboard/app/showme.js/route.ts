@@ -1,29 +1,31 @@
 // apps/dashboard/app/showme.js/route.ts
-export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
-    // 1. Calcul du chemin absolu vers le fichier compilé par Vite
-    // process.cwd() se trouve dans apps/dashboard, on remonte de deux crans pour aller dans packages
     const filePath = path.join(process.cwd(), '../../packages/widget/dist/showme.js')
     
-    // 2. Lecture du fichier en mémoire brute
+    // Vérification de sécurité pour éviter le crash au build
+    if (!fs.existsSync(filePath)) {
+      console.warn("[ShowMe] Widget non trouvé au chemin :", filePath)
+      return new NextResponse("Widget is compiling or not found.", { status: 503 })
+    }
+
     const fileContent = fs.readFileSync(filePath, 'utf-8')
 
-    // 3. Distribution avec des en-têtes HTTP ultra-stricts (Le standard SaaS)
     return new NextResponse(fileContent, {
       status: 200,
       headers: {
         'Content-Type': 'application/javascript; charset=utf-8',
-        'Access-Control-Allow-Origin': '*', // Indispensable pour que n'importe quel site puisse le télécharger
-        'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400', // Mise en cache agressive (CDN Edge)
+        'Access-Control-Allow-Origin': '*',
+        'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
       },
     })
   } catch (error) {
-    console.error("[ShowMe] Erreur critique : Impossible de distribuer le widget.", error)
-    return new NextResponse("Widget core not found. System offline.", { status: 404 })
+    return new NextResponse("Internal Server Error", { status: 500 })
   }
 }
