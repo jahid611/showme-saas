@@ -1,4 +1,5 @@
 // apps/dashboard/app/showme.js/route.ts
+export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
