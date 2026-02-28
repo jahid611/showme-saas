@@ -2,29 +2,75 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Site d'un Client ShowMe</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Widget ShowMe</title>
     <style>
-        body { font-family: sans-serif; padding: 100px; background: #f0f0f0; }
-        /* Voici le sélecteur #bouton-achat que tu as configuré dans la BDD ! */
-        #ili {
-            padding: 15px 30px;
-            background: #2563eb;
+        body {
+            font-family: sans-serif;
+            background-color: #0f0f0f;
             color: white;
-            border: none;
-            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            gap: 20px;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            padding: 40px;
+            border: 1px solid #333;
+            border-radius: 20px;
+            background: #1a1a1a;
+        }
+
+        button, div.trigger-box {
+            padding: 15px 25px;
             font-size: 16px;
+            font-weight: bold;
+            border-radius: 8px;
+            border: none;
             cursor: pointer;
+            transition: transform 0.2s;
+            text-align: center;
+        }
+
+        #naela { background-color: #6366f1; color: white; }
+        #poui { background-color: #ec4899; color: white; }
+        #test { background-color: #10b981; color: white; }
+        #bouton-achat { background-color: #f59e0b; color: white; }
+
+        button:hover {
+            transform: scale(1.05);
+        }
+
+        .info {
+            color: #666;
+            font-size: 14px;
+            max-width: 400px;
+            text-align: center;
         }
     </style>
 </head>
 <body>
 
-    <h1>Mon site E-commerce</h1>
-    <p>Survolez le bouton ci-dessous pour voir la magie opérer.</p>
+    <h1>ShowMe Widget Test</h1>
     
-    <button id="ili">Acheter ce produit</button>
+    <div class="container">
+        <button id="naela">Bouton #naela</button>
+        <button id="poui">Bouton #poui</button>
+        <button id="test">Bouton #test</button>
+        <div id="bouton-achat" class="trigger-box">Zone #bouton-achat</div>
+    </div>
 
-    <script src="http://localhost:3000/showme.js" data-client-id="32aa9a3d-c691-4038-ae81-ada94d890abb"></script>
+    <p class="info">
+        Survolez les boutons pour voir apparaître vos vidéos configurées dans le dashboard.
+    </p>
+
+<script src="http://localhost:3000/showme.js" data-client-id="32aa9a3d-c691-4038-ae81-ada94d890abb"></script>
 
 </body>
 </html>

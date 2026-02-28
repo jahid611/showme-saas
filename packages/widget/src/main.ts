@@ -1,6 +1,5 @@
-// packages/widget/src/main.ts
-
 interface Trigger {
+  id: string; // Ajouté pour le tracking
   selector: string;
   video_url: string;
 }
@@ -14,12 +13,17 @@ class ShowMeWidget {
   private playerWrapper: HTMLDivElement | null = null;
   private videoElement: HTMLVideoElement | null = null;
 
+  private playPromise: Promise<void> | null = null;
+  
+  // Chrono pour le tracking de 1 seconde
+  private trackTimeout: ReturnType<typeof setTimeout> | null = null;
+
   constructor() {
     this.clientId = this.extractClientId();
     this.apiBaseUrl = this.getApiBaseUrl();
     
     if (!this.clientId) {
-      console.error("[ShowMe] Erreur : Attribut 'data-client-id' manquant sur la balise script.");
+      console.error("[ShowMe] Erreur : data-client-id introuvable.");
       return;
     }
 
@@ -30,28 +34,19 @@ class ShowMeWidget {
     }
   }
 
-  /**
-   * Détermine l'URL de l'API dynamiquement.
-   * Si le script est servi depuis Vercel, on utilise l'URL de production.
-   */
   private getApiBaseUrl(): string {
-    const scriptTag = document.currentScript as HTMLScriptElement;
+    // Si on est en dev, on force localhost, sinon on essaie de deviner
+    const scriptTag = document.querySelector('script[data-client-id]') as HTMLScriptElement;
     if (scriptTag && scriptTag.src.includes('vercel.app')) {
-      try {
-        return new URL(scriptTag.src).origin;
-      } catch (e) {
-        return 'http://localhost:3000';
-      }
+      return new URL(scriptTag.src).origin;
     }
     return 'http://localhost:3000';
   }
 
   private extractClientId(): string {
-    const scriptTag = document.currentScript as HTMLScriptElement;
-    if (scriptTag && scriptTag.dataset.clientId) {
-      return scriptTag.dataset.clientId;
-    }
-    return "";
+    // Plus robuste que currentScript pour les modules
+    const scriptTag = document.querySelector('script[data-client-id]') as HTMLScriptElement;
+    return scriptTag?.dataset.clientId || "";
   }
 
   private async init() {
@@ -64,10 +59,10 @@ class ShowMeWidget {
       if (triggers && triggers.length > 0) {
         this.injectShadowDOM();
         this.attachEventListeners(triggers);
-        console.log("[ShowMe] Moteur d'injection activé avec succès.");
+        console.log(`%c[ShowMe] Moteur activé (${triggers.length} triggers)`, "color: #800020; font-weight: bold;");
       }
     } catch (error) {
-      console.error("[ShowMe] Échec de l'initialisation :", error);
+      console.error("[ShowMe] Échec initialisation :", error);
     }
   }
 
@@ -77,14 +72,24 @@ class ShowMeWidget {
     return await response.json();
   }
 
+  private async trackView(triggerId: string) {
+    try {
+      console.log("[ShowMe] 📡 Tracking : Vue de 1s détectée...");
+      await fetch(`${this.apiBaseUrl}/api/track`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ triggerId, clientId: this.clientId }),
+        mode: 'cors'
+      });
+    } catch (e) {
+      console.error("[ShowMe] Erreur tracking :", e);
+    }
+  }
+
   private injectShadowDOM() {
     const host = document.createElement('div');
     host.id = 'showme-widget-host';
-    host.style.position = 'absolute';
-    host.style.top = '0';
-    host.style.left = '0';
-    host.style.zIndex = '2147483647';
-    host.style.pointerEvents = 'none';
+    host.style.cssText = 'position:absolute;top:0;left:0;z-index:2147483647;pointer-events:none;';
     document.body.appendChild(host);
 
     this.shadowRoot = host.attachShadow({ mode: 'closed' });
@@ -95,14 +100,16 @@ class ShowMeWidget {
         position: fixed;
         opacity: 0;
         transform: scale(0.95) translateY(10px);
-        transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
         pointer-events: none;
-        box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.3), 0 8px 10px -6px rgb(0 0 0 / 0.3);
-        border-radius: 12px;
+        box-shadow: 0 30px 60px rgba(0,0,0,0.5);
+        border-radius: 40px;
         overflow: hidden;
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        border: 4px solid #1a1a1a;
         background: #000;
         z-index: 2147483647;
+        width: 280px;
+        aspect-ratio: 9/19.5;
       }
       .showme-player-wrapper.show {
         opacity: 1;
@@ -110,15 +117,26 @@ class ShowMeWidget {
       }
       .showme-video {
         display: block;
-        width: 250px;
-        height: auto;
-        aspect-ratio: 9/16;
+        width: 100%;
+        height: 100%;
         object-fit: cover;
+      }
+      .dynamic-island {
+        position: absolute;
+        top: 15px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 60px;
+        height: 12px;
+        background: #000;
+        border-radius: 10px;
+        z-index: 10;
       }
     `;
     
     this.playerWrapper = document.createElement('div');
     this.playerWrapper.className = 'showme-player-wrapper';
+    this.playerWrapper.innerHTML = `<div class="dynamic-island"></div>`;
     
     this.videoElement = document.createElement('video');
     this.videoElement.className = 'showme-video';
@@ -135,43 +153,42 @@ class ShowMeWidget {
     triggers.forEach(trigger => {
       const elements = document.querySelectorAll(trigger.selector);
       elements.forEach(element => {
-        element.addEventListener('mouseenter', (e) => this.showVideo(e as MouseEvent, trigger.video_url));
-        element.addEventListener('mouseleave', () => this.hideVideo());
+        element.addEventListener('mouseenter', (e) => {
+          this.showVideo(e as MouseEvent, trigger.video_url);
+          // Lancement du chrono de 1 seconde pour le tracking
+          this.trackTimeout = setTimeout(() => this.trackView(trigger.id), 1000);
+        });
+
+        element.addEventListener('mouseleave', () => {
+          this.hideVideo();
+          // Annulation du chrono si on part avant 1s
+          if (this.trackTimeout) {
+            clearTimeout(this.trackTimeout);
+            this.trackTimeout = null;
+          }
+        });
       });
     });
   }
 
-  private showVideo(event: MouseEvent, videoUrl: string) {
+  private async showVideo(event: MouseEvent, videoUrl: string) {
     if (!this.playerWrapper || !this.videoElement) return;
 
     const target = event.currentTarget as HTMLElement;
     const rect = target.getBoundingClientRect();
 
-    const videoWidth = 250;
-    const videoHeight = (videoWidth * 16) / 9;
+    const videoWidth = 280;
+    const videoHeight = (videoWidth * 19.5) / 9;
     const gap = 20;
 
-    // --- CALCUL AXE X (Horizontal) ---
     let left = rect.right + gap; 
-    const canFitRight = (rect.right + gap + videoWidth) <= window.innerWidth;
-    const canFitLeft = (rect.left - gap - videoWidth) >= 0;
-
-    if (!canFitRight) {
-      if (canFitLeft) {
-        left = rect.left - gap - videoWidth;
-      } else {
-        // Mode panique : on centre sur l'écran si ça ne tient nulle part
-        left = Math.max(gap, (window.innerWidth - videoWidth) / 2);
-      }
+    if ((rect.right + gap + videoWidth) > window.innerWidth) {
+      left = rect.left - gap - videoWidth;
     }
 
-    // --- CALCUL AXE Y (Vertical) ---
     let top = rect.top + (rect.height / 2) - (videoHeight / 2);
-    const minTop = gap;
-    const maxTop = window.innerHeight - videoHeight - gap;
-    top = Math.max(minTop, Math.min(top, maxTop));
+    top = Math.max(gap, Math.min(top, window.innerHeight - videoHeight - gap));
 
-    // --- APPLICATION ---
     this.playerWrapper.style.top = `${top}px`;
     this.playerWrapper.style.left = `${left}px`;
 
@@ -180,13 +197,24 @@ class ShowMeWidget {
     }
     
     this.playerWrapper.classList.add('show');
-    this.videoElement.play().catch(e => console.error("[ShowMe] Erreur de lecture vidéo:", e));
+    this.playPromise = this.videoElement.play();
   }
 
-  private hideVideo() {
+  private async hideVideo() {
     if (!this.playerWrapper || !this.videoElement) return;
     this.playerWrapper.classList.remove('show');
-    this.videoElement.pause();
+
+    if (this.playPromise !== null) {
+      try {
+        await this.playPromise;
+        this.videoElement.pause();
+      } catch (e) {
+      } finally {
+        this.playPromise = null;
+      }
+    } else {
+      this.videoElement.pause();
+    }
   }
 }
 

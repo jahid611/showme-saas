@@ -1,62 +1,68 @@
-// apps/dashboard/app/dashboard/layout.tsx
-import { redirect } from 'next/navigation'
-import { createClient } from '../../utils/supabase/server'
-import { logout } from './actions'
+import { LayoutGrid, Settings, PlusSquare, LogOut, Terminal, Play } from 'lucide-react';
+import Link from 'next/link';
 
-export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createClient()
-  
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) {
-    redirect('/login')
-  }
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  // Uniquement les menus fonctionnels
+  const navItems = [
+    { icon: <LayoutGrid size={22} />, label: 'Studio', href: '/dashboard' },
+    { icon: <PlusSquare size={22} />, label: 'Nouveau Projet', href: '/dashboard/new' },
+    { icon: <Play size={22} />, label: 'Sandbox de Test', href: '/dashboard/test' }, // Intégration de la Sandbox
+    { icon: <Terminal size={22} />, label: 'Installation', href: '/dashboard/install' },
+  ];
 
   return (
-    <div className="flex h-screen bg-zinc-950 overflow-hidden">
-      {/* Sidebar Latérale */}
-      <aside className="w-64 bg-zinc-900 border-r border-zinc-800 flex flex-col justify-between">
-        <div>
-          <div className="p-6">
-            <h1 className="text-2xl font-bold tracking-tight text-zinc-100">
-              Show<span className="text-bordeaux-500">Me</span>
-            </h1>
-            <p className="text-zinc-500 text-xs mt-1 font-mono uppercase tracking-wider">Studio Manager</p>
-          </div>
-          
-          <nav className="px-4 mt-6 space-y-2">
-            <a href="/dashboard" className="block px-4 py-2.5 bg-bordeaux-500 text-white rounded-md text-sm font-medium shadow-sm shadow-bordeaux-500/20">
-              Mes Triggers
-            </a>
-            <a href="#" className="block px-4 py-2.5 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 rounded-md text-sm font-medium transition-colors">
-              Paramètres
-            </a>
-            <a href="#" className="block px-4 py-2.5 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 rounded-md text-sm font-medium transition-colors">
-              Documentation
-            </a>
-          </nav>
+    <div className="flex h-screen bg-black text-white overflow-hidden w-full font-sans">
+      
+      {/* SIDEBAR ULTRA-VISIBLE (260px) */}
+      <aside className="w-[260px] border-r border-zinc-900 bg-[#020202] flex flex-col z-40">
+        
+        <div className="p-10">
+          <Link href="/dashboard" className="flex items-center gap-4 group">
+            <div className="w-12 h-12 bg-bordeaux-600 rounded-2xl flex items-center justify-center text-white font-black text-2xl italic shadow-[0_0_30px_rgba(128,0,32,0.4)] group-hover:rotate-6 transition-all duration-500">
+              S
+            </div>
+            <span className="text-2xl font-black tracking-tighter">ShowMe<span className="text-bordeaux-500">.</span></span>
+          </Link>
         </div>
 
-        {/* Profil Utilisateur & Déconnexion */}
-        <div className="p-4 border-t border-zinc-800 bg-zinc-900">
-          <div className="text-xs text-zinc-500 mb-3 truncate px-2">
-            Connecté en tant que :<br/>
-            <strong className="text-zinc-300">{user.email}</strong>
-          </div>
-          <form action={logout}>
-            <button type="submit" className="w-full text-left px-4 py-2 text-sm text-zinc-400 hover:bg-zinc-800 hover:text-white rounded-md transition-colors font-medium">
-              Déconnexion
-            </button>
-          </form>
+        <nav className="flex-1 px-6 space-y-2">
+          <p className="px-4 text-[10px] font-black text-zinc-700 uppercase tracking-[0.4em] mb-6">Menu Principal</p>
+          {navItems.map((item) => (
+            <Link 
+              key={item.href} 
+              href={item.href} 
+              className="flex items-center gap-5 px-5 py-4 text-zinc-500 hover:text-white hover:bg-zinc-900/50 rounded-[22px] transition-all duration-300 group relative"
+            >
+              <span className="group-hover:text-bordeaux-500 transition-all duration-300">
+                {item.icon}
+              </span>
+              <span className="text-[14px] font-bold tracking-tight">{item.label}</span>
+              
+              {/* Indicateur de sélection (Border Left Glow) */}
+              <div className="absolute left-0 w-1 h-0 bg-bordeaux-500 rounded-r-full group-hover:h-6 transition-all duration-500 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 shadow-[0_0_15px_#800020]"></div>
+            </Link>
+          ))}
+        </nav>
+
+        {/* FOOTER SIDEBAR */}
+        <div className="p-6 border-t border-zinc-900 mt-auto bg-black/20">
+          <Link href="/dashboard/settings" className="flex items-center gap-4 px-5 py-3 text-zinc-600 hover:text-white transition-colors mb-2">
+            <Settings size={18} />
+            <span className="text-xs font-bold">Paramètres</span>
+          </Link>
+          <button className="flex items-center gap-4 px-5 py-3 text-zinc-600 hover:text-red-500 transition-all duration-300 w-full group font-bold">
+            <LogOut size={18} className="group-hover:-translate-x-1 transition-transform" />
+            <span className="text-xs">Déconnexion</span>
+          </button>
         </div>
       </aside>
-      
-      {/* Contenu Principal Dynamique */}
-      <main className="flex-1 overflow-y-auto">
-        <div className="max-w-6xl mx-auto p-8">
-          {children}
-        </div>
+
+      {/* ZONE DE CONTENU DYNAMIQUE */}
+      <main className="flex-1 flex overflow-hidden bg-black relative">
+        {/* Grain de fond pour le look premium */}
+        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.03] pointer-events-none"></div>
+        {children}
       </main>
     </div>
-  )
+  );
 }
